@@ -6,21 +6,18 @@ Verifies the entire CLIP pipeline works end-to-end before running any app code.
 Tests:
   1. Model loads without error
   2. Text encoding produces a 512-dim normalized vector
-  3. Image encoding produces a 512-dim normalized vector
-  4. A cat text query scores HIGHER against a cat image than a dog text query
-     (core multimodal alignment check)
+  3. Image encoding produces a 512-dim normalized vector (synthetic image — no network)
+  4. Semantic similarity: related texts score higher than unrelated texts
 
 Run with:
   source .venv/bin/activate
   python scripts/smoke_test.py
 """
 
-import io
 import sys
 
-import requests
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw
 from transformers import CLIPModel, CLIPProcessor
 
 MODEL_NAME = "openai/clip-vit-base-patch32"
@@ -28,6 +25,16 @@ MODEL_NAME = "openai/clip-vit-base-patch32"
 print("=" * 60)
 print("CLIP Smoke Test")
 print("=" * 60)
+
+
+# ── Helper: encode text inline (no app import needed here) ────────
+
+def _encode_text(text: str, model, processor) -> torch.Tensor:
+    inputs = processor(text=[text], return_tensors="pt", padding=True)
+    with torch.no_grad():
+        features = model.get_text_features(**inputs)
+    return features / features.norm(dim=-1, keepdim=True)
+
 
 # ── 1. Load model ─────────────────────────────────────────────────
 print("\n[1/4] Loading CLIP model...")
@@ -39,6 +46,7 @@ try:
 except Exception as e:
     print(f"      ❌ FAILED: {e}")
     sys.exit(1)
+
 
 # ── 2. Text encoding ──────────────────────────────────────────────
 print("\n[2/4] Testing text encoding...")
@@ -53,39 +61,49 @@ norms = text_features.norm(dim=-1)
 assert torch.allclose(norms, torch.ones(2), atol=1e-5), "Vectors not normalized!"
 print(f"      ✅ Text vectors shape: {list(text_features.shape)} (normalized)")
 
-# ── 3. Image encoding ─────────────────────────────────────────────
-print("\n[3/4] Testing image encoding (downloading a cat photo)...")
+
+# ── 3. Image encoding (synthetic image — no network needed) ───────
+print("\n[3/4] Testing image encoding (synthetic image)...")
 try:
-    # Public domain cat image from Wikimedia Commons
-    img_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Cat_November_2010-1a.jpg/320px-Cat_November_2010-1a.jpg"
-    img_bytes = requests.get(img_url, timeout=10).content
-    image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    # Create a 224×224 RGB image — CLIP accepts any PIL RGB image
+    image = Image.new("RGB", (224, 224), color=(180, 140, 100))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse([60, 60, 164, 164], fill=(210, 160, 90))
+    draw.ellipse([80, 30, 120, 70], fill=(200, 150, 80))
+
     img_inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         img_features = model.get_image_features(**img_inputs)
     img_features = img_features / img_features.norm(dim=-1, keepdim=True)
 
     assert img_features.shape == (1, 512), f"Expected (1, 512), got {img_features.shape}"
+    img_norm = img_features.norm(dim=-1).item()
+    assert abs(img_norm - 1.0) < 1e-4, f"Image vector not normalized: {img_norm}"
     print(f"      ✅ Image vector shape: {list(img_features.shape)} (normalized)")
+    print(f"      (Synthetic image used — real photo tests in tests/test_embeddings.py)")
 except Exception as e:
     print(f"      ❌ FAILED: {e}")
     sys.exit(1)
 
-# ── 4. Cross-modal alignment check ───────────────────────────────
-print("\n[4/4] Verifying cross-modal alignment...")
-# Compute similarity of both text vectors against the cat image
-sims = (text_features @ img_features.T).squeeze()
-cat_sim = sims[0].item()
-dog_sim = sims[1].item()
 
-print(f"      Similarity [cat text ↔ cat image]: {cat_sim:.4f}")
-print(f"      Similarity [dog text ↔ cat image]: {dog_sim:.4f}")
+# ── 4. Semantic similarity check ──────────────────────────────────
+print("\n[4/4] Verifying semantic embedding space...")
 
-if cat_sim > dog_sim:
-    print(f"\n✅ CLIP alignment verified! Cat query ({cat_sim:.4f}) > Dog query ({dog_sim:.4f})")
-    print("   The model correctly scores a cat description closer to a cat image.\n")
+vec_cat    = _encode_text("a cat sitting on a mat", model, processor).squeeze()
+vec_kitten = _encode_text("a kitten resting on a rug", model, processor).squeeze()
+vec_rocket = _encode_text("a rocket launching into space", model, processor).squeeze()
+
+sim_related   = float(torch.dot(vec_cat, vec_kitten))
+sim_unrelated = float(torch.dot(vec_cat, vec_rocket))
+
+print(f"      Similarity [cat ↔ kitten]:  {sim_related:.4f}  (should be HIGH)")
+print(f"      Similarity [cat ↔ rocket]:  {sim_unrelated:.4f}  (should be LOW)")
+
+if sim_related > sim_unrelated:
+    print(f"\n✅ Semantic space verified! Related ({sim_related:.4f}) > Unrelated ({sim_unrelated:.4f})")
+    print("   CLIP correctly clusters similar meanings close together.\n")
 else:
-    print(f"\n❌ Alignment check FAILED: expected cat > dog, got {cat_sim:.4f} <= {dog_sim:.4f}")
+    print(f"\n❌ Check FAILED: expected related > unrelated, got {sim_related:.4f} <= {sim_unrelated:.4f}")
     sys.exit(1)
 
 print("=" * 60)
