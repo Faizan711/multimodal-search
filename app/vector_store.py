@@ -23,7 +23,12 @@ from app.config import settings
 
 
 def get_client() -> QdrantClient:
-    """Create a Qdrant client connected to the configured host."""
+    """Create a Qdrant client — uses Qdrant Cloud if QDRANT_URL is set, else local."""
+    if settings.qdrant_url:
+        return QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key or None,
+        )
     return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
 
 

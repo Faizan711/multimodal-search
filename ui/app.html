@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Multimodal Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0c0c0e;
+  --panel:#111113;
+  --card:#161618;
+  --border:rgba(255,255,255,0.07);
+  --border-hi:rgba(255,255,255,0.13);
+  --text:#f0f0f0;
+  --sub:#888;
+  --muted:#444;
+  --accent:#3b82f6;
+  --success:#10b981;
+  --mono:'JetBrains Mono',monospace;
+}
+
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5}
+
+/* SHELL */
+.shell{display:grid;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+
+/* TOPBAR */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;border-bottom:1px solid var(--border);
+  background:var(--panel);flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{
+  width:22px;height:22px;border-radius:5px;
+  background:var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;
+}
+.logo-name{font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+.tags{display:flex;gap:5px}
+.tag{
+  padding:2px 8px;border:1px solid var(--border);border-radius:4px;
+  font-family:var(--mono);font-size:11px;color:var(--sub);
+}
+
+/* MAIN — two columns */
+.main{
+  display:grid;
+  grid-template-columns:360px 1fr;
+  overflow:hidden;
+  height:100%;
+}
+
+/* LEFT */
+.left{
+  border-right:1px solid var(--border);
+  background:var(--panel);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  height:100%;
+}
+
+/* SEARCH BOX */
+.search-box{
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+
+.mode-switch{
+  display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;
+  margin-bottom:11px;
+}
+.mode-btn{
+  flex:1;padding:6px;border:none;background:transparent;
+  color:var(--sub);font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;
+  cursor:pointer;transition:all .15s;
+}
+.mode-btn.on{background:var(--card);color:var(--text)}
+.mode-btn:first-child{border-right:1px solid var(--border)}
+
+textarea.q-input{
+  width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:9px 10px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;
+  outline:none;resize:none;height:66px;line-height:1.5;
+  transition:border-color .15s;margin-bottom:10px;display:block;
+}
+textarea.q-input:focus{border-color:var(--border-hi)}
+textarea.q-input::placeholder{color:var(--muted)}
+
+.upload-zone{
+  border:1px dashed var(--border);border-radius:6px;padding:16px;
+  text-align:center;cursor:pointer;transition:border-color .15s;
+  position:relative;background:var(--card);margin-bottom:10px;
+}
+.upload-zone:hover{border-color:var(--border-hi)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-zone.filled{border-style:solid;border-color:var(--border-hi)}
+#uPreview{width:100%;max-height:90px;object-fit:cover;border-radius:4px;margin-top:8px;display:none}
+.upload-hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+.go-btn{
+  width:100%;padding:8px;border:none;border-radius:6px;
+  background:var(--accent);color:#fff;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:500;
+  cursor:pointer;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.go-btn:hover{opacity:.85}
+.go-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* PIPELINE PANEL — scrollable, slim scrollbar */
+.pipeline-panel{
+  flex:1;
+  min-height:0;         /* crucial: allows flex child to shrink below content size */
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:14px 16px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,0.08) transparent;
+}
+.pipeline-panel::-webkit-scrollbar{width:3px}
+.pipeline-panel::-webkit-scrollbar-track{background:transparent}
+.pipeline-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:4px}
+
+.pipe-label{
+  font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;
+}
+
+/* IDLE MESSAGE */
+.idle-msg{
+  display:flex;flex-direction:column;align-items:center;
+  gap:8px;text-align:center;color:var(--muted);padding:28px 20px;
+}
+.idle-msg p{font-size:12px;line-height:1.6;max-width:190px}
+
+/* STEPS CONTAINER */
+.steps{display:flex;flex-direction:column;gap:3px}
+
+/* STEP */
+.step{
+  border:1px solid transparent;
+  border-radius:6px;
+  overflow:hidden;
+  transition:border-color .2s;
+  flex-shrink:0;
+  scroll-margin-top:6px;
+}
+.step.idle  {border-color:transparent}
+.step.active{border-color:var(--border-hi)}
+.step.done  {border-color:transparent}
+.step.err   {border-color:rgba(239,68,68,.35)}
+
+/* step header */
+.step-head{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;background:var(--card);
+}
+.step-dot{
+  width:16px;height:16px;border-radius:50%;
+  border:1px solid var(--muted);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:var(--muted);flex-shrink:0;
+  transition:all .2s;
+}
+.active .step-dot{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.done   .step-dot{background:var(--success);border-color:var(--success);color:#fff;font-size:10px}
+.err    .step-dot{background:#ef4444;border-color:#ef4444;color:#fff}
+
+.step-name{flex:1;font-size:12.5px;font-weight:500;color:var(--muted);transition:color .2s}
+.active .step-name,.done .step-name{color:var(--text)}
+.step-ms{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* step body — hidden unless active or done */
+.step-body{
+  padding:8px 10px 10px;
+  border-top:1px solid var(--border);
+  background:var(--bg);
+}
+.step-desc{font-size:11px;color:var(--sub);margin-bottom:7px;line-height:1.5}
+
+/* token chips */
+.chips{display:flex;flex-wrap:wrap;gap:3px}
+.chip{
+  font-family:var(--mono);font-size:10px;
+  background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18);
+  color:#93c5fd;border-radius:3px;padding:1px 5px;
+}
+
+/* layer bars */
+.lbars{display:flex;align-items:flex-end;gap:2px;height:26px}
+.lb{flex:1;border-radius:1px 1px 0 0;background:var(--accent);opacity:.55;min-height:2px;transition:height .4s ease}
+
+/* vector bars */
+.vbars{display:flex;align-items:flex-end;gap:1px;height:26px}
+.vb{flex:1;border-radius:1px 1px 0 0;background:rgba(255,255,255,.2);min-height:1px;transition:height .5s ease}
+.vvals{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px}
+
+/* scan */
+.scan-wrap{position:relative;height:30px;border-radius:4px;background:var(--card);border:1px solid var(--border);overflow:hidden}
+.scan-dots{display:flex;flex-wrap:wrap;gap:2px;padding:5px;position:absolute;inset:0;align-content:flex-start}
+.sd{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.1);transition:background .2s,transform .2s}
+.sd.lit{background:var(--success);transform:scale(1.4)}
+.scan-line{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);opacity:.5;animation:scan 1s ease-in-out forwards}
+@keyframes scan{from{left:0}to{left:100%;opacity:0}}
+
+/* score rows */
+.srow{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.strack{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.sfill{height:100%;border-radius:2px;background:var(--success);transition:width .7s ease}
+.sval{font-family:var(--mono);font-size:10px;color:var(--success);width:30px;text-align:right}
+
+/* RIGHT */
+.right{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+
+.results-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:48px;border-bottom:1px solid var(--border);
+  background:var(--panel);flex-shrink:0;
+}
+.results-label{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.results-meta{font-family:var(--mono);font-size:11px;color:var(--success)}
+
+/* results grid */
+.grid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:1px;background:var(--border);
+  flex:1;overflow:hidden;
+}
+.card{
+  position:relative;overflow:hidden;background:var(--card);cursor:pointer;
+  opacity:0;transition:opacity .35s ease;
+}
+.card.show{opacity:1}
+.card img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+.card:hover img{transform:scale(1.04)}
+.card-over{
+  position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 55%);
+  opacity:0;transition:opacity .2s;
+  display:flex;flex-direction:column;justify-content:flex-end;padding:10px 12px;
+}
+.card:hover .card-over{opacity:1}
+.card-score{font-family:var(--mono);font-size:11px;color:#6ee7b7;margin-bottom:2px}
+.card-cap{font-size:11px;color:rgba(255,255,255,.8);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-rank{
+  position:absolute;top:7px;left:7px;
+  background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.1);
+  border-radius:3px;padding:1px 5px;font-size:10px;
+  color:rgba(255,255,255,.45);font-family:var(--mono);
+}
+
+/* empty state */
+.empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;gap:10px;color:var(--muted);text-align:center;padding:40px;
+}
+.empty p{font-size:12.5px;line-height:1.7;max-width:220px}
+
+/* toast */
+#toast{
+  position:fixed;bottom:16px;right:16px;z-index:999;
+  padding:7px 14px;border-radius:5px;font-size:12px;font-weight:500;
+  background:var(--card);border:1px solid var(--border-hi);
+  transform:translateY(50px);opacity:0;transition:all .2s ease;pointer-events:none;
+}
+#toast.on{transform:translateY(0);opacity:1}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-mark">◆</div>
+      <span class="logo-name">Multimodal Search</span>
+    </div>
+    <div class="tags">
+      <span class="tag">CLIP</span>
+      <span class="tag">ViT-B/32</span>
+      <span class="tag">Qdrant</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEFT PANEL -->
+    <div class="left">
+
+      <!-- Search controls -->
+      <div class="search-box">
+        <div class="mode-switch">
+          <button class="mode-btn on" id="mText" onclick="setMode('text')">Text</button>
+          <button class="mode-btn"    id="mImg"  onclick="setMode('image')">Image</button>
+        </div>
+
+        <div id="textArea">
+          <textarea class="q-input" id="qInput"
+            placeholder="Describe an image — e.g. sunset over mountains"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();go()}"
+          ></textarea>
+        </div>
+
+        <div id="imgArea" style="display:none">
+          <div class="upload-zone" id="uZone">
+            <input type="file" id="uFile" accept="image/*" onchange="pickFile(event)"/>
+            <div id="uHint" style="font-size:13px;color:var(--sub)">Drop image or click to browse</div>
+            <div class="upload-hint">JPEG · PNG · WebP</div>
+            <img id="uPreview" alt=""/>
+          </div>
+        </div>
+
+        <button class="go-btn" id="goBtn" onclick="go()">
+          <span id="bIcon">→</span>
+          <span id="bLabel">Search</span>
+        </button>
+      </div>
+
+      <!-- Pipeline panel -->
+      <div class="pipeline-panel" id="pipePanel">
+        <div class="pipe-label">Pipeline</div>
+
+        <!-- Idle hint -->
+        <div class="idle-msg" id="idleMsg">
+          <span style="font-size:26px;opacity:.18">◈</span>
+          <p>Run a search to watch each AI step execute in real time.</p>
+        </div>
+
+        <!-- Steps — shown after first search -->
+        <div class="steps" id="steps" style="display:none">
+
+          <div class="step idle" id="s1">
+            <div class="step-head">
+              <div class="step-dot">1</div>
+              <div class="step-name">Tokenization</div>
+              <div class="step-ms" id="ms1"></div>
+            </div>
+            <div class="step-body" style="display:none" id="b1">
+              <div class="step-desc">Query split into BPE subword tokens</div>
+              <div class="chips" id="chips"></div>
+            </div>
+          </div>
+
+          <div class="step idle" id="s2">
+            <div class="step-head">
+              <div class="step-dot">2</div>
+              <div class="step-name">CLIP Encoder</div>
+              <div class="step-ms" id="ms2"></div>
+            </div>
+            <div class="step-body" style="display:none" id="b2">
+              <div class="step-desc">12-layer transformer · <span id="encType">text</span> path</div>
+              <div class="lbars" id="lbars"></div>
+            </div>
+          </div>
+
+          <div class="step idle" id="s3">
+            <div class="step-head">
+              <div class="step-dot">3</div>
+              <div class="step-name">512-dim Vector</div>
+              <div class="step-ms" id="ms3"></div>
+            </div>
+            <div class="step-body" style="display:none" id="b3">
+              <div class="step-desc">L2-normalized · dot product = cosine sim</div>
+              <div class="vbars" id="vbars"></div>
+              <div class="vvals" id="vvals"></div>
+            </div>
+          </div>
+
+          <div class="step idle" id="s4">
+            <div class="step-head">
+              <div class="step-dot">4</div>
+              <div class="step-name">Qdrant HNSW Search</div>
+              <div class="step-ms" id="ms4"></div>
+            </div>
+            <div class="step-body" style="display:none" id="b4">
+              <div class="step-desc">Scanning <span id="dbN">541</span> vectors · O(log n) ANN</div>
+              <div class="scan-wrap" id="scanWrap">
+                <div class="scan-dots" id="scanDots"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="step idle" id="s5">
+            <div class="step-head">
+              <div class="step-dot">5</div>
+              <div class="step-name">Ranked Results</div>
+              <div class="step-ms" id="ms5"></div>
+            </div>
+            <div class="step-body" style="display:none" id="b5">
+              <div class="step-desc">Top matches by cosine similarity</div>
+              <div id="scores"></div>
+            </div>
+          </div>
+
+        </div><!-- /steps -->
+      </div><!-- /pipeline-panel -->
+
+    </div><!-- /left -->
+
+    <!-- RIGHT PANEL -->
+    <div class="right">
+      <div class="results-bar">
+        <span class="results-label">Results</span>
+        <span class="results-meta" id="rmeta"></span>
+      </div>
+
+      <div class="empty" id="emptyState">
+        <span style="font-size:30px;opacity:.12">⬚</span>
+        <p>Results appear here.<br/>Try "mountain landscape" or upload a photo.</p>
+      </div>
+
+      <div class="grid" id="grid" style="display:none"></div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let mode = 'text', upFile = null, running = false, t0 = 0;
+
+// ── MODE ──
+function setMode(m) {
+  mode = m;
+  document.getElementById('mText').classList.toggle('on', m === 'text');
+  document.getElementById('mImg').classList.toggle('on',  m === 'image');
+  document.getElementById('textArea').style.display = m === 'text'  ? 'block' : 'none';
+  document.getElementById('imgArea').style.display  = m === 'image' ? 'block' : 'none';
+}
+
+// ── UPLOAD ──
+const uZone = document.getElementById('uZone');
+uZone.addEventListener('dragover',  e => { e.preventDefault(); uZone.style.borderColor = 'var(--border-hi)'; });
+uZone.addEventListener('dragleave', () => uZone.style.borderColor = '');
+uZone.addEventListener('drop', e => {
+  e.preventDefault(); uZone.style.borderColor = '';
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+function pickFile(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+function setFile(f) {
+  upFile = f;
+  const r = new FileReader();
+  r.onload = ev => {
+    const p = document.getElementById('uPreview');
+    p.src = ev.target.result; p.style.display = 'block';
+    document.getElementById('uHint').style.display = 'none';
+    uZone.classList.add('filled');
+  };
+  r.readAsDataURL(f);
+}
+
+// ── STEP HELPERS ──
+function setState(n, state) {
+  const el = document.getElementById('s' + n);
+  el.className = 'step ' + state;
+  const body = document.getElementById('b' + n);
+  // Show body when active or done
+  body.style.display = (state === 'active' || state === 'done') ? 'block' : 'none';
+}
+function setMs(n, ms) { document.getElementById('ms' + n).textContent = ms ? ms + 'ms' : ''; }
+function tick() { return Math.round(performance.now() - t0); }
+
+function scrollTo(n) {
+  const el = document.getElementById('s' + n);
+  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ── ANIMATIONS ──
+function doTokens(q) {
+  const words = q.split(/\s+/).slice(0, 9);
+  const toks  = ['[SOS]', ...words.flatMap(w => w.length > 5 ? [w.slice(0,4)+'…', w.slice(4)] : [w]), '[EOS]'];
+  const c = document.getElementById('chips'); c.innerHTML = '';
+  toks.forEach((t, i) => {
+    const s = document.createElement('span'); s.className = 'chip'; s.textContent = t;
+    s.style.opacity = 0; c.appendChild(s);
+    setTimeout(() => s.style.opacity = 1, i * 55);
+  });
+}
+
+function doLayerBars() {
+  const c = document.getElementById('lbars'); c.innerHTML = '';
+  for (let i = 0; i < 12; i++) {
+    const b = document.createElement('div'); b.className = 'lb'; b.style.height = '2px'; c.appendChild(b);
+    setTimeout(() => b.style.height = (20 + Math.random() * 80) + '%', i * 50);
+  }
+}
+
+function doVecBars() {
+  const c = document.getElementById('vbars'); c.innerHTML = '';
+  const vals = [];
+  for (let i = 0; i < 40; i++) {
+    const v = Math.random(); vals.push((v * 2 - 1).toFixed(3));
+    const b = document.createElement('div'); b.className = 'vb'; b.style.height = '1px'; c.appendChild(b);
+    setTimeout(() => b.style.height = (v * 100) + '%', i * 12);
+  }
+  document.getElementById('vvals').textContent = vals.slice(0, 5).join(', ') + ' …';
+}
+
+function doScan(cb) {
+  const wrap = document.getElementById('scanWrap');
+  const c    = document.getElementById('scanDots'); c.innerHTML = '';
+  wrap.querySelectorAll('.scan-line').forEach(e => e.remove());
+  const N = 55, dots = [];
+  for (let i = 0; i < N; i++) {
+    const d = document.createElement('div'); d.className = 'sd'; c.appendChild(d); dots.push(d);
+  }
+  const line = document.createElement('div'); line.className = 'scan-line'; wrap.appendChild(line);
+  setTimeout(() => {
+    const lit = Array.from({ length: 9 }, () => Math.floor(Math.random() * N));
+    lit.forEach((idx, i) => setTimeout(() => dots[idx].classList.add('lit'), i * 65));
+    setTimeout(cb, lit.length * 65 + 100);
+  }, 900);
+}
+
+function doScores(results) {
+  const c = document.getElementById('scores'); c.innerHTML = '';
+  results.slice(0, 4).forEach(r => {
+    const pct = Math.min((r.score / 0.4) * 100, 100).toFixed(0);
+    const row = document.createElement('div'); row.className = 'srow';
+    row.innerHTML = `<div class="strack"><div class="sfill" style="width:0"></div></div><span class="sval">${r.score.toFixed(3)}</span>`;
+    c.appendChild(row);
+    setTimeout(() => row.querySelector('.sfill').style.width = pct + '%', 50);
+  });
+}
+
+// ── RESULTS ──
+function showResults(results) {
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  results.forEach((r, i) => {
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = `
+      <img src="${API}/images/${r.filename}" alt="${r.caption}" loading="lazy"
+           onerror="this.src='';this.parentElement.style.background='var(--card)'"/>
+      <div class="card-over">
+        <div class="card-score">${r.score.toFixed(4)}</div>
+        <div class="card-cap">${r.caption}</div>
+      </div>
+      <div class="card-rank">${i + 1}</div>`;
+    g.appendChild(card);
+    setTimeout(() => card.classList.add('show'), i * 50);
+  });
+}
+
+// ── TOAST ──
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  setTimeout(() => t.classList.remove('on'), 2800);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ── MAIN SEARCH ──
+async function go() {
+  if (running) return;
+  const q = document.getElementById('qInput').value.trim();
+  if (mode === 'text'  && !q)      { toast('Enter a search query first.'); return; }
+  if (mode === 'image' && !upFile) { toast('Upload an image first.'); return; }
+
+  running = true; t0 = performance.now();
+  document.getElementById('goBtn').disabled = true;
+  document.getElementById('bIcon').textContent  = '○';
+  document.getElementById('bLabel').textContent = 'Searching';
+
+  // Show pipeline
+  document.getElementById('idleMsg').style.display = 'none';
+  document.getElementById('steps').style.display   = 'flex';
+  document.getElementById('encType').textContent    = mode === 'text' ? 'text' : 'vision';
+
+  // Reset all steps to idle (body hidden)
+  [1,2,3,4,5].forEach(n => { setState(n, 'idle'); setMs(n, 0); });
+
+  // Hide/reset results
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('grid').style.display       = 'none';
+  document.getElementById('rmeta').textContent        = '';
+
+  // Fire API request early (runs in parallel with animations)
+  const apiP = callApi(q);
+
+  // ── STEP 1 ──
+  scrollTo(1); setState(1, 'active');
+  doTokens(mode === 'text' ? q : 'image patches — 7×7 grid of 32×32px');
+  await sleep(560); setState(1, 'done'); setMs(1, tick());
+
+  // ── STEP 2 ──
+  scrollTo(2); setState(2, 'active');
+  doLayerBars();
+  await sleep(660); setState(2, 'done'); setMs(2, tick());
+
+  // ── STEP 3 ──
+  scrollTo(3); setState(3, 'active');
+  doVecBars();
+  await sleep(610); setState(3, 'done'); setMs(3, tick());
+
+  // ── STEP 4 ──
+  scrollTo(4); setState(4, 'active');
+  let scanDone = false;
+  doScan(() => { scanDone = true; });
+
+  let data;
+  try { data = await apiP; } catch(e) {
+    [1,2,3,4,5].forEach(n => setState(n, 'err'));
+    toast('API error — is the server running?');
+    reset(); return;
+  }
+  if (!scanDone) await sleep(300);
+  setState(4, 'done'); setMs(4, tick());
+
+  // ── STEP 5 ──
+  scrollTo(5); setState(5, 'active');
+  doScores(data.results);
+  await sleep(420); setState(5, 'done'); setMs(5, tick());
+
+  // Show image grid
+  document.getElementById('grid').style.display = 'grid';
+  showResults(data.results);
+  document.getElementById('rmeta').textContent = `${data.count} results · ${tick()}ms`;
+
+  reset();
+}
+
+async function callApi(q) {
+  if (mode === 'text') {
+    const r = await fetch(`${API}/search/text?q=${encodeURIComponent(q)}&top_k=9`);
+    if (!r.ok) throw new Error(r.statusText);
+    return r.json();
+  }
+  const fd = new FormData(); fd.append('file', upFile);
+  const r = await fetch(`${API}/search/image?top_k=9`, { method: 'POST', body: fd });
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+function reset() {
+  running = false;
+  document.getElementById('goBtn').disabled = false;
+  document.getElementById('bIcon').textContent  = '→';
+  document.getElementById('bLabel').textContent = 'Search';
+}
+
+// Prefetch db count
+fetch(`${API}/info`).then(r => r.json()).then(d => {
+  if (d.points_count) document.getElementById('dbN').textContent = d.points_count.toLocaleString();
+}).catch(() => {});
+</script>
+</body>
+</html>

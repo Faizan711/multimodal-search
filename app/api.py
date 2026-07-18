@@ -22,13 +22,20 @@ Learning notes:
 """
 
 import io
+import pathlib
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
+from app.config import settings
 from app.embeddings import encode_image, encode_text
 from app.vector_store import ensure_collection, get_collection_info, search
+
+UI_HTML = pathlib.Path("ui/app.html")
+IMAGES_DIR = pathlib.Path(settings.image_dir)
 
 # ── App setup ────────────────────────────────────────────────────────────────
 
@@ -38,13 +45,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Allow Streamlit (running on a different port) to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your UI's domain
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve images from data/images/ at /images/<filename>
+if IMAGES_DIR.exists():
+    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -56,6 +66,14 @@ def startup():
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def serve_ui():
+    """Serve the main search UI."""
+    if UI_HTML.exists():
+        return FileResponse(str(UI_HTML), media_type="text/html")
+    return HTMLResponse("<h1>UI not found — run uvicorn from project root</h1>", status_code=404)
+
 
 @app.get("/health", tags=["System"])
 def health_check():

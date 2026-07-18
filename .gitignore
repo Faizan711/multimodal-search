@@ -15,9 +15,10 @@ build/
 # Environment
 .env
 
-# Data - don't commit large binary files
-data/images/
+# Qdrant local DB files — not needed, vectors are in data/vectors.json
 qdrant_storage/
+
+# data/images/ and data/vectors.json ARE committed (needed for HF Spaces deploy)
 
 # ML model cache
 .cache/
