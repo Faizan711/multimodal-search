@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: indigo
 sdk: gradio
 sdk_version: 4.36.1
-app_file: app.py
+app_file: gradio_app.py
 pinned: false
 license: mit
 short_description: Search 541 images by text or image using CLIP + Qdrant
