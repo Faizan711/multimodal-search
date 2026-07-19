@@ -20,5 +20,5 @@ echo "Importing vectors into Qdrant Cloud..."
 PYTHONPATH=/app python scripts/import_vectors.py
 
 echo ""
-echo "Starting FastAPI on port 7860..."
-exec uvicorn app.api:app --host 0.0.0.0 --port 7860
+echo "Starting FastAPI on port ${PORT:-7860}..."
+exec uvicorn app.api:app --host 0.0.0.0 --port "${PORT:-7860}"

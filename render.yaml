@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: multimodal-search
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # Render uses port from $PORT env var, not hardcoded 7860
+    envVars:
+      - key: QDRANT_URL
+        sync: false        # you enter this in Render dashboard
+      - key: QDRANT_API_KEY
+        sync: false        # you enter this in Render dashboard
+    healthCheckPath: /health
