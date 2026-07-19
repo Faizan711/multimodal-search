@@ -9,7 +9,8 @@ Pillow==10.3.0
 qdrant-client==1.9.1
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
-gradio==4.36.1
+# Don't pin gradio — HF Spaces has it pre-installed at the correct version
+gradio
 
 # ── API Backend (local dev only) ──────────────────────────────────────────────
 fastapi==0.111.0
