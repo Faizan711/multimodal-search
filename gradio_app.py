@@ -8,12 +8,20 @@ Self-contained: no separate FastAPI server needed.
 - Results shown in gr.Gallery
 """
 
-import io
 import pathlib
 import time
 
 import gradio as gr
 from PIL import Image
+
+# spaces is only available inside HF Spaces — mock it for local dev
+try:
+    import spaces
+except ImportError:
+    class spaces:  # noqa: N801
+        @staticmethod
+        def GPU(fn):
+            return fn
 
 from app.config import settings
 from app.embeddings import encode_image, encode_text
@@ -41,6 +49,18 @@ def _startup():
 
 
 VECTOR_COUNT = _startup()
+
+
+# ── GPU-accelerated encoding (ZeroGPU allocates GPU only for these calls) ──────
+
+@spaces.GPU
+def _clip_encode_text(query: str):
+    return encode_text(query)
+
+
+@spaces.GPU
+def _clip_encode_image(image):
+    return encode_image(image)
 
 
 # ── Pipeline HTML renderer ────────────────────────────────────────────────────
@@ -179,14 +199,11 @@ def _run_search(query_text, query_image, top_k):
     steps[1]["body"]   = _layer_bars()
     yield _build_html(steps), []
 
-    # Actual encoding happens here
-    t_enc = time.perf_counter()
+    # Actual encoding — runs on ZeroGPU when on HF Spaces
     if is_text:
-        vector = encode_text(query)
+        vector = _clip_encode_text(query)
     else:
-        image  = query_image  # PIL Image from gr.Image
-        vector = encode_image(image)
-    enc_ms = int((time.perf_counter() - t_enc) * 1000)
+        vector = _clip_encode_image(query_image)
 
     steps[1]["status"] = "done"
     steps[1]["ms"] = ms()
