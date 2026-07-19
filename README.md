@@ -2,18 +2,31 @@
 title: Multimodal Search
 emoji: 🔍
 colorFrom: blue
-colorTo: purple
-sdk: docker
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.36.1
+app_file: app.py
 pinned: false
 license: mit
-short_description: Search images by text or image using CLIP + Qdrant
+short_description: Search 541 images by text or image using CLIP + Qdrant
 ---
 
 # Multimodal Search
 
-Search 541 images using natural language or image upload — powered by OpenAI CLIP embeddings and Qdrant vector search.
+Search images using natural language or image upload — powered by OpenAI CLIP and Qdrant vector search.
 
-## How to use
-1. Type a description like *"sunset over mountains"* or *"dog on the beach"*
-2. Watch the AI pipeline animate in real time (tokenization → CLIP encoding → vector → Qdrant search)
-3. See matching images ranked by cosine similarity
+## How it works
+
+1. Type a description (e.g. *"sunset over mountains"*) or upload an image
+2. Watch the **live AI pipeline animation** — each step executes and updates in real time:
+   - Tokenization → CLIP Encoder → 512-dim Vector → Qdrant HNSW Search → Ranked Results
+3. Results appear as a grid ranked by cosine similarity score
+
+## Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Embedding model | OpenAI CLIP ViT-B/32 |
+| Vector database | Qdrant Cloud |
+| Frontend | Gradio (HF Spaces) |
+| Backend | Python — direct CLIP + Qdrant calls |
