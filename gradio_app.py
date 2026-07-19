@@ -382,6 +382,9 @@ with gr.Blocks(css=CSS, title="Multimodal Search") as demo:
         outputs=[pipe_html, gallery],
     )
 
+# HF Spaces imports this file and calls demo directly — set show_api here
+demo = demo.queue()
+demo.show_api = False
 
 if __name__ == "__main__":
-    demo.queue().launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, show_api=False)
