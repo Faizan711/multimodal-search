@@ -16,8 +16,8 @@ This project was built from scratch to explore how modern image search works und
 |-----------|-----------|
 | **Embedding Model** | OpenAI CLIP (ViT-B/32) |
 | **Vector Database** | Qdrant (HNSW indexing) |
-| **Frontend/UI** | Gradio |
-| **Backend** | Python (PyTorch, Transformers) |
+| **Frontend/UI** | HTML / CSS / Vanilla JS |
+| **Backend** | FastAPI, Python (PyTorch, Transformers) |
 
 ---
 
@@ -52,22 +52,23 @@ pip install -r requirements.txt
 ### 4. Run the Application
 The repository includes a pre-exported file of vectors (`data/vectors.json`) containing 541 sample images. 
 
-Start the Gradio app:
+Start the FastAPI server:
 ```bash
-python gradio_app.py
+uvicorn app.api:app --host 0.0.0.0 --port 8000
 ```
 *Note: On the very first run, the app will automatically read `data/vectors.json` and import the vectors into your local Qdrant database. It will also download the CLIP model weights.*
 
 ### 5. Use the App
 Open your browser and navigate to:
-**http://localhost:7860**
+**http://localhost:8000**
 
 Type a query or upload an image, and watch the pipeline animate as it searches!
 
 ---
 
 ## Project Structure
-- `gradio_app.py`: Main Gradio frontend and search execution logic.
+- `app/api.py`: FastAPI server routes and static file serving.
+- `ui/app.html`: Custom HTML/JS frontend with the animated pipeline.
 - `app/embeddings.py`: CLIP model initialization and inference code.
 - `app/vector_store.py`: Qdrant client connection and search logic.
 - `app/config.py`: Configuration settings and environment variables.
